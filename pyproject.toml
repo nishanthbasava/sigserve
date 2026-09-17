@@ -26,6 +26,7 @@ worker = [
 ]
 dev = [
     "pytest>=8.0",
+    "pytest-cov>=5.0",
     "httpx>=0.27",
     "ruff>=0.6",
     "fakeredis>=2.23",
@@ -40,6 +41,11 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.coverage.run]
+source = ["sigserve"]
+# Only exercised inside the R worker image, not in the unit environment.
+omit = ["sigserve/rpy2_bridge.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
