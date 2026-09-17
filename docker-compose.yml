@@ -18,6 +18,8 @@ services:
       dockerfile: Dockerfile.worker
     image: sigserve-worker
     env_file: .env
+    environment:
+      SAMPLER_ENGINE: ${SAMPLER_ENGINE:-auto}
     command: rq worker sigserve --url redis://redis:6379/0
     depends_on:
       redis:
