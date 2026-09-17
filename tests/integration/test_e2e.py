@@ -44,5 +44,5 @@ def test_submit_and_poll_end_to_end() -> None:
 
     assert body is not None
     assert body["status"] == "finished", f"job did not finish: {body}"
-    assert body["result"]["rank"] == 3
-    assert body["result"]["n_samples"] == 2
+    assert len(body["result"]["signatures"]) == 2  # mutation types
+    assert len(body["result"]["exposures"]) == 3  # rank

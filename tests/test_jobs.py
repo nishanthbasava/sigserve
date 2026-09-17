@@ -18,8 +18,9 @@ def test_submit_and_poll(client: TestClient) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "finished"
-    assert body["result"]["rank"] == 3
-    assert body["result"]["n_samples"] == 2
+    assert len(body["result"]["signatures"]) == 2  # mutation types
+    assert len(body["result"]["exposures"]) == 3  # rank
+    assert "diagnostics" in body["result"]
 
 
 def test_job_row_records_timestamps(client: TestClient) -> None:

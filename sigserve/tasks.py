@@ -1,7 +1,7 @@
-import time
 from datetime import UTC, datetime
 from typing import Any
 
+from sigserve import sampler
 from sigserve.db import open_session
 from sigserve.models import Job
 
@@ -33,11 +33,4 @@ def run_job(job_id: str, matrix: list[list[int]], params: dict[str, Any]) -> dic
 
 
 def _compute(matrix: list[list[int]], params: dict[str, Any]) -> dict[str, Any]:
-    """Placeholder computation; replaced by the bayesNMF sampler in a later phase."""
-    time.sleep(0.5)
-    return {
-        "note": "dummy result",
-        "n_mutation_types": len(matrix),
-        "n_samples": len(matrix[0]) if matrix else 0,
-        "rank": params["rank"],
-    }
+    return sampler.run_bayesnmf(matrix, params).to_dict()
