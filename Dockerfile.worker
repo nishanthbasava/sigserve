@@ -1,0 +1,26 @@
+# Worker image: Python + R + bayesNMF. rocker/r2u resolves CRAN dependencies
+# as prebuilt Ubuntu binaries, avoiding long source compiles.
+FROM rocker/r2u:24.04
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-venv python3-dev build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Pinned bayesNMF commit; it is a GitHub-only package, so a moving default
+# branch would otherwise make builds unreproducible.
+ARG BAYESNMF_REF=71184311a95781dcb625ad9bc5a75052c082b744
+
+RUN install.r remotes \
+    && installGithub.r "jennalandy/bayesNMF@${BAYESNMF_REF}"
+
+WORKDIR /app
+
+COPY pyproject.toml README.md ./
+COPY sigserve ./sigserve
+
+RUN python3 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir ".[worker]"
+
+ENV PATH="/opt/venv/bin:$PATH"
+
+CMD ["rq", "worker", "sigserve", "--url", "redis://redis:6379/0"]

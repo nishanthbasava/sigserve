@@ -12,7 +12,9 @@ services:
         condition: service_healthy
 
   worker:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
     env_file: .env
     command: rq worker sigserve --url redis://redis:6379/0
     depends_on:
