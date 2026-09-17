@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -13,6 +14,13 @@ class JobSubmission(BaseModel):
         description="Mutation-count matrix; rows are mutation types, columns are samples"
     )
     params: SamplerParams = SamplerParams()
+
+
+class JobSummary(BaseModel):
+    id: str
+    status: str
+    created_at: datetime
+    finished_at: datetime | None = None
 
 
 class JobStatus(BaseModel):

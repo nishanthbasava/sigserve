@@ -2,10 +2,11 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from sigserve import tasks
 from sigserve.db import open_session
-from sigserve.models import Job
+from sigserve.models import ApiKey, Job
 
 
 def test_submit_and_poll(client: TestClient) -> None:
@@ -41,7 +42,8 @@ def test_failed_job_records_error(client: TestClient, monkeypatch: pytest.Monkey
     monkeypatch.setattr(tasks, "_compute", boom)
 
     with open_session() as session:
-        job = Job(params={"rank": 2})
+        key_id = session.scalar(select(ApiKey.id))
+        job = Job(params={"rank": 2}, api_key_id=key_id)
         session.add(job)
         session.commit()
         job_id = job.id

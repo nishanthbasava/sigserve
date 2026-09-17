@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, String, Text, func
+from sqlalchemy import JSON, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -28,6 +28,9 @@ class Job(Base):
 
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    api_key_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("api_keys.id"), index=True
     )
     status: Mapped[str] = mapped_column(String(20), default="queued")
     params: Mapped[dict[str, Any]] = mapped_column(JSON)
