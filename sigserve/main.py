@@ -12,7 +12,7 @@ from sigserve.config import get_settings
 from sigserve.db import get_session
 from sigserve.models import ApiKey, Job
 from sigserve.queue import get_queue
-from sigserve.schemas import JobStatus, JobSubmission, JobSummary
+from sigserve.schemas import JobResult, JobStatus, JobSubmission, JobSummary
 from sigserve.tasks import TERMINAL_STATUSES, mark_job_failed, run_job
 
 app = FastAPI(title="SigServe", version="0.1.0")
@@ -65,7 +65,20 @@ def get_job(job_id: str, session: SessionDep, api_key: AuthDep) -> JobStatus:
     # cannot be probed for existence.
     if job is None or job.api_key_id != api_key.id:
         raise HTTPException(status_code=404, detail="Job not found")
-    return JobStatus(id=job.id, status=job.status, result=job.result, error=job.error)
+    return JobStatus(id=job.id, status=job.status, error=job.error)
+
+
+@app.get("/jobs/{job_id}/results", response_model=JobResult)
+def get_job_results(job_id: str, session: SessionDep, api_key: AuthDep) -> JobResult:
+    job = session.get(Job, job_id)
+    if job is None or job.api_key_id != api_key.id:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.status != "finished":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Job is {job.status}; results are available once finished",
+        )
+    return JobResult(id=job.id, result=job.result)
 
 
 @app.delete("/jobs/{job_id}", response_model=JobStatus)

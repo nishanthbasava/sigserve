@@ -17,11 +17,25 @@ def test_submit_and_poll(client: TestClient) -> None:
 
     response = client.get(f"/jobs/{job_id}")
     assert response.status_code == 200
-    body = response.json()
-    assert body["status"] == "finished"
-    assert len(body["result"]["signatures"]) == 2  # mutation types
-    assert len(body["result"]["exposures"]) == 2  # rank
-    assert "diagnostics" in body["result"]
+    assert response.json()["status"] == "finished"
+
+    result = client.get(f"/jobs/{job_id}/results").json()["result"]
+    assert len(result["signatures"]) == 2  # mutation types
+    assert len(result["exposures"]) == 2  # rank
+    assert "diagnostics" in result
+
+
+def test_results_unavailable_until_finished(client: TestClient) -> None:
+    with open_session() as session:
+        key_id = session.scalar(select(ApiKey.id))
+        job = Job(params={"rank": 1}, api_key_id=key_id, status="running")
+        session.add(job)
+        session.commit()
+        job_id = job.id
+
+    response = client.get(f"/jobs/{job_id}/results")
+    assert response.status_code == 409
+    assert "running" in response.json()["detail"]
 
 
 def test_job_row_records_timestamps(client: TestClient) -> None:

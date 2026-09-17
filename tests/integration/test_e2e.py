@@ -61,8 +61,12 @@ def test_submit_and_poll_end_to_end() -> None:
 
     assert body is not None
     assert body["status"] == "finished", f"job did not finish: {body}"
-    assert len(body["result"]["signatures"]) == 20  # mutation types
-    assert all(len(row) == 2 for row in body["result"]["signatures"])  # rank
-    assert len(body["result"]["exposures"]) == 2  # rank
-    assert all(len(row) == 8 for row in body["result"]["exposures"])  # samples
-    assert body["result"]["diagnostics"]["engine"] == "bayesNMF"
+
+    result = httpx.get(
+        f"{API_URL}/jobs/{job_id}/results", headers=headers, timeout=10.0
+    ).json()["result"]
+    assert len(result["signatures"]) == 20  # mutation types
+    assert all(len(row) == 2 for row in result["signatures"])  # rank
+    assert len(result["exposures"]) == 2  # rank
+    assert all(len(row) == 8 for row in result["exposures"])  # samples
+    assert result["diagnostics"]["engine"] == "bayesNMF"

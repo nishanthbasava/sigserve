@@ -53,5 +53,9 @@ class JobSummary(BaseModel):
 class JobStatus(BaseModel):
     id: str
     status: str
-    result: dict[str, Any] | None = None
     error: str | None = None
+
+
+class JobResult(BaseModel):
+    id: str
+    result: dict[str, Any]
