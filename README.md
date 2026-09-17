@@ -21,6 +21,14 @@ uv pip install -e ".[dev]"
 .venv/bin/pytest
 ```
 
+Integration tests run against the full docker-compose stack:
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+.venv/bin/pytest -m integration
+```
+
 ## Status
 
 Early development.
