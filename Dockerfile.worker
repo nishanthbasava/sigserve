@@ -10,7 +10,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # branch would otherwise make builds unreproducible.
 ARG BAYESNMF_REF=71184311a95781dcb625ad9bc5a75052c082b744
 
+# The packages after remotes are used by bayesNMF but missing from its
+# DESCRIPTION Imports, so they must be installed explicitly.
 RUN install.r remotes \
+        RcppHungarian abind armspp cowplot ggtext ggthemes lsa reshape2 stringr \
     && installGithub.r "jennalandy/bayesNMF@${BAYESNMF_REF}"
 
 WORKDIR /app
