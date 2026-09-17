@@ -4,8 +4,9 @@ from fastapi import Depends, FastAPI, HTTPException
 from rq import Queue
 from sqlalchemy.orm import Session
 
+from sigserve.auth import require_api_key
 from sigserve.db import get_session
-from sigserve.models import Job
+from sigserve.models import ApiKey, Job
 from sigserve.queue import get_queue
 from sigserve.schemas import JobStatus, JobSubmission
 from sigserve.tasks import run_job
@@ -14,6 +15,7 @@ app = FastAPI(title="SigServe", version="0.1.0")
 
 QueueDep = Annotated[Queue, Depends(get_queue)]
 SessionDep = Annotated[Session, Depends(get_session)]
+AuthDep = Annotated[ApiKey, Depends(require_api_key)]
 
 
 @app.get("/health")
@@ -22,7 +24,9 @@ def health() -> dict[str, str]:
 
 
 @app.post("/jobs", response_model=JobStatus, status_code=202)
-def submit_job(submission: JobSubmission, queue: QueueDep, session: SessionDep) -> JobStatus:
+def submit_job(
+    submission: JobSubmission, queue: QueueDep, session: SessionDep, api_key: AuthDep
+) -> JobStatus:
     job = Job(params=submission.params.model_dump())
     session.add(job)
     session.commit()
@@ -38,7 +42,7 @@ def submit_job(submission: JobSubmission, queue: QueueDep, session: SessionDep) 
 
 
 @app.get("/jobs/{job_id}", response_model=JobStatus)
-def get_job(job_id: str, session: SessionDep) -> JobStatus:
+def get_job(job_id: str, session: SessionDep, api_key: AuthDep) -> JobStatus:
     job = session.get(Job, job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
