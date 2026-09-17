@@ -8,6 +8,9 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     sampler_engine: str = "auto"  # auto | bayesnmf | stub
     job_timeout_seconds: int = 3600
+    stale_job_grace_seconds: int = 300
+    job_retention_days: int = 30
+    maintenance_interval_seconds: int = 3600
 
 
 @lru_cache
