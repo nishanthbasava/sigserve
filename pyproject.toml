@@ -43,7 +43,8 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-m 'not integration'"
+addopts = "-m 'not integration and not golden'"
 markers = [
     "integration: tests that require the docker-compose stack",
+    "golden: sampler-accuracy tests that require R and run in the worker image",
 ]

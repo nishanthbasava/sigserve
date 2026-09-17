@@ -29,6 +29,14 @@ docker compose up -d --build
 .venv/bin/pytest -m integration
 ```
 
+Golden tests check that the real sampler recovers planted signatures; they
+need R, so they run inside the worker image:
+
+```bash
+docker compose run --rm --no-deps -v ./tests:/app/tests worker \
+    sh -c 'pip install -q ".[dev]" && pytest -m golden'
+```
+
 ## Status
 
 Early development.
