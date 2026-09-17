@@ -4,6 +4,8 @@ WORKDIR /app
 
 COPY pyproject.toml README.md ./
 COPY sigserve ./sigserve
+COPY alembic.ini ./
+COPY migrations ./migrations
 
 RUN pip install --no-cache-dir .
 

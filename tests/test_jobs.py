@@ -1,22 +1,11 @@
-from collections.abc import Iterator
+from typing import Any
 
-import fakeredis
 import pytest
 from fastapi.testclient import TestClient
-from rq import Queue
 
-from sigserve.main import app
-from sigserve.queue import get_queue
-
-
-@pytest.fixture
-def client() -> Iterator[TestClient]:
-    connection = fakeredis.FakeRedis()
-    queue = Queue("sigserve-test", connection=connection, is_async=False)
-    app.dependency_overrides[get_queue] = lambda: queue
-    with TestClient(app) as test_client:
-        yield test_client
-    app.dependency_overrides.clear()
+from sigserve import tasks
+from sigserve.db import open_session
+from sigserve.models import Job
 
 
 def test_submit_and_poll(client: TestClient) -> None:
@@ -31,6 +20,37 @@ def test_submit_and_poll(client: TestClient) -> None:
     assert body["status"] == "finished"
     assert body["result"]["rank"] == 3
     assert body["result"]["n_samples"] == 2
+
+
+def test_job_row_records_timestamps(client: TestClient) -> None:
+    response = client.post("/jobs", json={"matrix": [[1]], "params": {"rank": 2}})
+    job_id = response.json()["id"]
+
+    with open_session() as session:
+        job = session.get(Job, job_id)
+        assert job is not None
+        assert job.started_at is not None
+        assert job.finished_at is not None
+
+
+def test_failed_job_records_error(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    def boom(matrix: list[list[int]], params: dict[str, Any]) -> dict[str, Any]:
+        raise RuntimeError("sampler exploded")
+
+    monkeypatch.setattr(tasks, "_compute", boom)
+
+    with open_session() as session:
+        job = Job(params={"rank": 2})
+        session.add(job)
+        session.commit()
+        job_id = job.id
+
+    with pytest.raises(RuntimeError):
+        tasks.run_job(job_id, [[1]], {"rank": 2})
+
+    body = client.get(f"/jobs/{job_id}").json()
+    assert body["status"] == "failed"
+    assert "sampler exploded" in body["error"]
 
 
 def test_get_unknown_job(client: TestClient) -> None:
