@@ -29,20 +29,27 @@ def wait_for_api(timeout: float = 60.0) -> None:
 def test_submit_and_poll_end_to_end() -> None:
     wait_for_api()
 
-    payload = {"matrix": [[1, 2], [3, 4]], "params": {"rank": 3}}
+    # Small but non-degenerate count matrix: 20 mutation types x 8 samples.
+    # Iterations are capped low so the real sampler finishes in well under
+    # a minute; the goal is exercising the full pipeline, not convergence.
+    matrix = [[(i * 7 + j * 3) % 10 + 1 for j in range(8)] for i in range(20)]
+    payload = {"matrix": matrix, "params": {"rank": 2, "max_iters": 300}}
     response = httpx.post(f"{API_URL}/jobs", json=payload, timeout=10.0)
     assert response.status_code == 202
     job_id = response.json()["id"]
 
     body = None
-    deadline = time.monotonic() + 60.0
+    deadline = time.monotonic() + 300.0
     while time.monotonic() < deadline:
         body = httpx.get(f"{API_URL}/jobs/{job_id}", timeout=10.0).json()
         if body["status"] in ("finished", "failed"):
             break
-        time.sleep(1.0)
+        time.sleep(2.0)
 
     assert body is not None
     assert body["status"] == "finished", f"job did not finish: {body}"
-    assert len(body["result"]["signatures"]) == 2  # mutation types
-    assert len(body["result"]["exposures"]) == 3  # rank
+    assert len(body["result"]["signatures"]) == 20  # mutation types
+    assert all(len(row) == 2 for row in body["result"]["signatures"])  # rank
+    assert len(body["result"]["exposures"]) == 2  # rank
+    assert all(len(row) == 8 for row in body["result"]["exposures"])  # samples
+    assert body["result"]["diagnostics"]["engine"] == "bayesNMF"

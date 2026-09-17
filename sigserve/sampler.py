@@ -1,12 +1,16 @@
 """Interface to the bayesNMF sampler.
 
-`run_bayesnmf` is the single seam between SigServe and R: the worker calls it,
-tests mock it, and the rpy2 bridge will replace its internals. The stub below
-returns a deterministic fake factorization with the correct shapes.
+`run_bayesnmf` is the single seam between SigServe and R: the worker calls it
+and tests mock it. Engine selection is driven by the `sampler_engine` setting:
+"auto" uses the real rpy2 bridge when rpy2 is installed (the worker image) and
+falls back to a deterministic stub otherwise (dev machines, unit tests).
 """
 
+import importlib.util
 from dataclasses import dataclass
 from typing import Any
+
+from sigserve.config import get_settings
 
 
 @dataclass
@@ -24,6 +28,19 @@ class SamplerResult:
 
 
 def run_bayesnmf(matrix: list[list[int]], params: dict[str, Any]) -> SamplerResult:
+    engine = get_settings().sampler_engine
+    if engine == "auto":
+        engine = "bayesnmf" if importlib.util.find_spec("rpy2") else "stub"
+
+    if engine == "stub":
+        return _run_stub(matrix, params)
+
+    from sigserve.rpy2_bridge import run_sampler
+
+    return run_sampler(matrix, params)
+
+
+def _run_stub(matrix: list[list[int]], params: dict[str, Any]) -> SamplerResult:
     rank = params["rank"]
     n_types = len(matrix)
     n_samples = len(matrix[0]) if matrix else 0

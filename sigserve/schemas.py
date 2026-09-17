@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 class SamplerParams(BaseModel):
     rank: int = Field(default=5, ge=1, le=20)
+    max_iters: int = Field(default=2000, ge=100, le=20000)
 
 
 class JobSubmission(BaseModel):
