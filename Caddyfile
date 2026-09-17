@@ -1,0 +1,5 @@
+# With SIGSERVE_DOMAIN set to a real domain, Caddy provisions Let's Encrypt
+# certificates automatically; the localhost default uses its internal CA.
+{$SIGSERVE_DOMAIN:localhost} {
+	reverse_proxy api:8000
+}

@@ -1,0 +1,77 @@
+# Production stack: Caddy terminates TLS and is the only service with
+# published ports; Postgres and Redis stay on the internal network.
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SIGSERVE_DOMAIN: ${SIGSERVE_DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
+  api:
+    build: .
+    image: sigserve-api
+    restart: unless-stopped
+    env_file: .env
+    command: sh -c "alembic upgrade head && uvicorn sigserve.main:app --host 0.0.0.0 --port 8000 --workers 2"
+    depends_on:
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    image: sigserve-worker
+    restart: unless-stopped
+    env_file: .env
+    command: rq worker sigserve --url redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+
+  maintenance:
+    build: .
+    image: sigserve-maintenance
+    restart: unless-stopped
+    env_file: .env
+    command: python -m sigserve.maintenance
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
