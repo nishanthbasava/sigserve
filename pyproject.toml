@@ -47,6 +47,9 @@ source = ["sigserve"]
 # Only exercised inside the R worker image, not in the unit environment.
 omit = ["sigserve/rpy2_bridge.py"]
 
+[tool.coverage.report]
+fail_under = 85
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-m 'not integration and not golden'"

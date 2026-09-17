@@ -1,6 +1,7 @@
 services:
   api:
     build: .
+    image: sigserve-api
     ports:
       - "8000:8000"
     env_file: .env
@@ -15,6 +16,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.worker
+    image: sigserve-worker
     env_file: .env
     command: rq worker sigserve --url redis://redis:6379/0
     depends_on:
@@ -25,6 +27,7 @@ services:
 
   maintenance:
     build: .
+    image: sigserve-maintenance
     env_file: .env
     command: python -m sigserve.maintenance
     depends_on:
