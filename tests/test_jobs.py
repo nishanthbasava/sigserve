@@ -10,7 +10,7 @@ from sigserve.models import ApiKey, Job
 
 
 def test_submit_and_poll(client: TestClient) -> None:
-    payload = {"matrix": [[1, 2], [3, 4]], "params": {"rank": 3}}
+    payload = {"matrix": [[1, 2], [3, 4]], "params": {"rank": 2}}
     response = client.post("/jobs", json=payload)
     assert response.status_code == 202
     job_id = response.json()["id"]
@@ -20,12 +20,12 @@ def test_submit_and_poll(client: TestClient) -> None:
     body = response.json()
     assert body["status"] == "finished"
     assert len(body["result"]["signatures"]) == 2  # mutation types
-    assert len(body["result"]["exposures"]) == 3  # rank
+    assert len(body["result"]["exposures"]) == 2  # rank
     assert "diagnostics" in body["result"]
 
 
 def test_job_row_records_timestamps(client: TestClient) -> None:
-    response = client.post("/jobs", json={"matrix": [[1]], "params": {"rank": 2}})
+    response = client.post("/jobs", json={"matrix": [[1]], "params": {"rank": 1}})
     job_id = response.json()["id"]
 
     with open_session() as session:
