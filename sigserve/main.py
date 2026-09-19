@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.responses import RedirectResponse
 from rq import Callback, Queue
 from rq.command import send_stop_job_command
 from sqlalchemy import select
@@ -20,6 +21,11 @@ app = FastAPI(title="SigServe", version="0.1.0")
 QueueDep = Annotated[Queue, Depends(get_queue)]
 SessionDep = Annotated[Session, Depends(get_session)]
 AuthDep = Annotated[ApiKey, Depends(require_api_key)]
+
+
+@app.get("/", include_in_schema=False)
+def root() -> RedirectResponse:
+    return RedirectResponse("/docs")
 
 
 @app.get("/health")

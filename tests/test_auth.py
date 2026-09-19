@@ -27,6 +27,13 @@ def test_health_is_public(client: TestClient) -> None:
     assert bare.get("/health").status_code == 200
 
 
+def test_root_redirects_to_docs(client: TestClient) -> None:
+    bare = TestClient(app)
+    response = bare.get("/", follow_redirects=False)
+    assert response.status_code == 307
+    assert response.headers["location"] == "/docs"
+
+
 def test_valid_key_accepted(client: TestClient) -> None:
     response = client.post("/jobs", json=PAYLOAD)
     assert response.status_code == 202
