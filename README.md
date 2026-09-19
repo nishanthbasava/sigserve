@@ -92,9 +92,16 @@ the stack and runs the end-to-end and golden tests against the real sampler.
 ## Performance
 
 `scripts/loadtest.js` (k6) drives the submit/poll path — see the script
-header for how to run it. On a local Docker stack it sustains ~280 req/s at
-20 concurrent users with p95 latency of 24 ms and zero failures; sampler
-throughput scales separately with worker count.
+header for how to run it. Measured at 20 concurrent users, 90 s, zero
+failures:
+
+| Environment | Throughput | p95 latency |
+|---|---|---|
+| AWS EC2 (m7i-flex.large, full TLS path via Caddy) | 191 req/s | 89 ms |
+| Local Docker stack (M-series Mac) | 282 req/s | 24 ms |
+
+Sampler throughput scales separately with worker count (one MCMC per
+worker).
 
 ## Deployment
 
