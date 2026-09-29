@@ -37,7 +37,12 @@ def health() -> dict[str, str]:
 def submit_job(
     submission: JobSubmission, queue: QueueDep, session: SessionDep, api_key: AuthDep
 ) -> JobStatus:
-    job = Job(params=submission.params.model_dump(), api_key_id=api_key.id)
+    job = Job(
+        params=submission.params.model_dump(),
+        api_key_id=api_key.id,
+        n_mutation_types=len(submission.matrix),
+        n_samples=len(submission.matrix[0]),
+    )
     session.add(job)
     session.commit()
 

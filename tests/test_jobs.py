@@ -49,6 +49,17 @@ def test_job_row_records_timestamps(client: TestClient) -> None:
         assert job.finished_at is not None
 
 
+def test_job_row_records_matrix_dims(client: TestClient) -> None:
+    payload = {"matrix": [[1, 2, 3], [4, 5, 6]], "params": {"rank": 2}}
+    job_id = client.post("/jobs", json=payload).json()["id"]
+
+    with open_session() as session:
+        job = session.get(Job, job_id)
+        assert job is not None
+        assert job.n_mutation_types == 2
+        assert job.n_samples == 3
+
+
 def test_failed_job_records_error(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     def boom(matrix: list[list[int]], params: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError("sampler exploded")

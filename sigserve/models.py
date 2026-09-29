@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -34,6 +34,11 @@ class Job(Base):
     )
     status: Mapped[str] = mapped_column(String(20), default="queued")
     params: Mapped[dict[str, Any]] = mapped_column(JSON)
+    # Matrix dimensions, kept out of params so analytics can filter and
+    # bucket on them without unpacking JSON. Nullable: jobs predating the
+    # columns have no recorded shape.
+    n_mutation_types: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    n_samples: Mapped[int | None] = mapped_column(Integer, nullable=True)
     result: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(

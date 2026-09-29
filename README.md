@@ -103,6 +103,14 @@ failures:
 Sampler throughput scales separately with worker count (one MCMC per
 worker).
 
+`scripts/analytics.sql` reports on the jobs table — daily success rate with
+a 7-day rolling window, queue-latency percentiles, sampler runtime bucketed
+by matrix size, and per-key usage:
+
+```bash
+docker compose exec -T postgres psql -U sigserve sigserve < scripts/analytics.sql
+```
+
 ## Deployment
 
 One VM, Docker Compose, Caddy for automatic HTTPS:
