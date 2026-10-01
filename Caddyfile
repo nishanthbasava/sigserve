@@ -1,5 +1,18 @@
-# With SIGSERVE_DOMAIN set to a real domain, Caddy provisions Let's Encrypt
-# certificates automatically; the localhost default uses its internal CA.
 {$SIGSERVE_DOMAIN:localhost} {
-	reverse_proxy api:8000
+	# The SPA calls /api/*; strip the prefix for the api service.
+	handle_path /api/* {
+		reverse_proxy api:8000
+	}
+
+	# Bare API paths stay reachable for curl users and the interactive
+	# docs, exactly as before the web UI existed.
+	@bare_api path /jobs /jobs/* /shared/* /keys /health /meta /docs /openapi.json
+	handle @bare_api {
+		reverse_proxy api:8000
+	}
+
+	# Everything else is the web UI.
+	handle {
+		reverse_proxy web:80
+	}
 }

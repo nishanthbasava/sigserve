@@ -1,4 +1,14 @@
 services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    image: sigserve-web
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+
   api:
     build: .
     image: sigserve-api
@@ -20,7 +30,7 @@ services:
     env_file: .env
     environment:
       SAMPLER_ENGINE: ${SAMPLER_ENGINE:-auto}
-    command: rq worker sigserve --url redis://redis:6379/0
+    command: rq worker sigserve --url ${REDIS_URL:-redis://redis:6379/0}
     depends_on:
       redis:
         condition: service_started

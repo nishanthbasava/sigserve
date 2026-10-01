@@ -18,6 +18,16 @@ services:
       - caddy_config:/config
     depends_on:
       - api
+      - web
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    image: sigserve-web
+    restart: unless-stopped
+    depends_on:
+      - api
 
   api:
     build: .
@@ -38,7 +48,7 @@ services:
     image: sigserve-worker
     restart: unless-stopped
     env_file: .env
-    command: rq worker sigserve --url redis://redis:6379/0
+    command: rq worker sigserve --url ${REDIS_URL:-redis://redis:6379/0}
     depends_on:
       redis:
         condition: service_started
