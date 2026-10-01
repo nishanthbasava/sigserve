@@ -113,6 +113,16 @@ class JobStatus(BaseModel):
     queue_position: int | None = None
 
 
+class KeyRequest(BaseModel):
+    name: str | None = Field(default=None, max_length=100)
+
+
+class KeyCreated(BaseModel):
+    id: str
+    name: str
+    key: str
+
+
 class JobResult(BaseModel):
     """Self-contained result payload: everything a shared results page
     needs to render and label plots without a second request."""

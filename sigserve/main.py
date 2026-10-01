@@ -1,5 +1,6 @@
+import os
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -9,12 +10,21 @@ from rq.command import send_stop_job_command
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from sigserve.auth import require_api_key
+from sigserve.auth import mint_key, require_api_key
 from sigserve.config import get_settings
 from sigserve.db import get_session
 from sigserve.models import ApiKey, Job
 from sigserve.queue import get_queue
-from sigserve.schemas import JobResult, JobStatus, JobSubmission, JobSummary
+from sigserve.schemas import (
+    MAX_MUTATION_TYPES,
+    MAX_SAMPLES,
+    JobResult,
+    JobStatus,
+    JobSubmission,
+    JobSummary,
+    KeyCreated,
+    KeyRequest,
+)
 from sigserve.tasks import TERMINAL_STATUSES, mark_job_failed, run_job
 
 app = FastAPI(title="SigServe", version="0.1.0")
@@ -62,6 +72,40 @@ def _job_status(job: Job, queue: Queue | None = None) -> JobStatus:
     )
 
 
+def _client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _rate_limit(queue: Queue, bucket: str, limit: int) -> None:
+    """Fixed-window hourly counter in Redis; fails open if Redis is down
+    so an outage degrades to no limiting rather than no service."""
+    window = datetime.now(UTC).strftime("%Y%m%d%H")
+    redis_key = f"sigserve:ratelimit:{bucket}:{window}"
+    try:
+        count = queue.connection.incr(redis_key)
+        if count == 1:
+            queue.connection.expire(redis_key, 3600)
+    except Exception:
+        return
+    if count > limit:
+        raise HTTPException(status_code=429, detail="Rate limit exceeded; try again later")
+
+
+def _job_result(job: Job) -> JobResult:
+    return JobResult(
+        id=job.id,
+        name=job.name,
+        params=job.params,
+        labels=job.labels,
+        created_at=job.created_at,
+        finished_at=job.finished_at,
+        result=job.result,
+    )
+
+
 @app.get("/", include_in_schema=False)
 def root() -> RedirectResponse:
     return RedirectResponse("/docs")
@@ -72,10 +116,34 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/meta")
+def meta() -> dict[str, Any]:
+    return {
+        "version": app.version,
+        "max_mutation_types": MAX_MUTATION_TYPES,
+        "max_samples": MAX_SAMPLES,
+        "bayesnmf_ref": os.environ.get("BAYESNMF_REF"),
+    }
+
+
+@app.post("/keys", response_model=KeyCreated, status_code=201)
+def create_api_key(
+    body: KeyRequest, request: Request, session: SessionDep, queue: QueueDep
+) -> KeyCreated:
+    """Self-serve key minting so the web UI works without an operator.
+
+    Keys scope job listings per browser; the per-IP rate limit keeps
+    minting from being free DoS ammunition."""
+    _rate_limit(queue, f"keys:{_client_ip(request)}", get_settings().key_mint_per_hour)
+    api_key, plaintext = mint_key(session, body.name or "web")
+    return KeyCreated(id=api_key.id, name=api_key.name, key=plaintext)
+
+
 @app.post("/jobs", response_model=JobStatus, status_code=202)
 def submit_job(
     submission: JobSubmission, queue: QueueDep, session: SessionDep, api_key: AuthDep
 ) -> JobStatus:
+    _rate_limit(queue, f"jobs:{api_key.id}", get_settings().jobs_per_key_per_hour)
     job = Job(
         params=submission.params.model_dump(),
         api_key_id=api_key.id,
@@ -145,15 +213,64 @@ def get_job_results(job_id: str, session: SessionDep, api_key: AuthDep) -> JobRe
             status_code=409,
             detail=f"Job is {job.status}; results are available once finished",
         )
-    return JobResult(
-        id=job.id,
-        name=job.name,
-        params=job.params,
-        labels=job.labels,
-        created_at=job.created_at,
-        finished_at=job.finished_at,
-        result=job.result,
+    return _job_result(job)
+
+
+@app.post("/jobs/{job_id}/rerun", response_model=JobStatus, status_code=202)
+def rerun_job(
+    job_id: str, session: SessionDep, queue: QueueDep, api_key: AuthDep
+) -> JobStatus:
+    """Resubmit a job's stored input and params as a new job."""
+    source = session.get(Job, job_id)
+    if source is None or source.api_key_id != api_key.id:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if source.matrix is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Job predates input persistence and cannot be re-run; submit it again",
+        )
+    _rate_limit(queue, f"jobs:{api_key.id}", get_settings().jobs_per_key_per_hour)
+
+    job = Job(
+        params=source.params,
+        api_key_id=api_key.id,
+        name=source.name,
+        labels=source.labels,
+        matrix=source.matrix,
+        n_mutation_types=source.n_mutation_types,
+        n_samples=source.n_samples,
     )
+    session.add(job)
+    session.commit()
+    _enqueue(queue, job.id)
+    return _job_status(job, queue)
+
+
+# Shared, unauthenticated reads. A job id is a 122-bit random UUID known
+# only to its submitter, so the URL itself is the capability (same model
+# as a private doc link); the authenticated routes still 404 for foreign
+# jobs, and listing always requires a key.
+
+
+@app.get("/shared/jobs/{job_id}", response_model=JobStatus)
+def get_shared_job(job_id: str, session: SessionDep, queue: QueueDep) -> JobStatus:
+    job = session.get(Job, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return _job_status(job, queue)
+
+
+@app.get("/shared/jobs/{job_id}/results", response_model=JobResult)
+def get_shared_job_results(job_id: str, session: SessionDep) -> JobResult:
+    job = session.get(Job, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.status != "finished":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Job is {job.status}; results are available once finished",
+        )
+    return _job_result(job)
 
 
 @app.delete("/jobs/{job_id}", response_model=JobStatus)

@@ -4,18 +4,14 @@
 """
 
 import argparse
-import secrets
 
-from sigserve.auth import hash_key
+from sigserve.auth import mint_key
 from sigserve.db import open_session
-from sigserve.models import ApiKey
 
 
 def create_key(name: str) -> str:
-    plaintext = f"sgs_{secrets.token_urlsafe(32)}"
     with open_session() as session:
-        session.add(ApiKey(name=name, key_hash=hash_key(plaintext)))
-        session.commit()
+        _, plaintext = mint_key(session, name)
     return plaintext
 
 

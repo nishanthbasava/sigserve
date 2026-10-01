@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     stale_job_grace_seconds: int = 300
     job_retention_days: int = 30
     maintenance_interval_seconds: int = 3600
+    # Abuse guards for the public instance; both are per rolling hour.
+    key_mint_per_hour: int = 10
+    jobs_per_key_per_hour: int = 50
 
 
 @lru_cache

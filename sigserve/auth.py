@@ -1,4 +1,5 @@
 import hashlib
+import secrets
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException
@@ -11,6 +12,15 @@ from sigserve.models import ApiKey
 
 def hash_key(plaintext: str) -> str:
     return hashlib.sha256(plaintext.encode()).hexdigest()
+
+
+def mint_key(session: Session, name: str) -> tuple[ApiKey, str]:
+    """Create a key and return (row, plaintext); only the hash is stored."""
+    plaintext = f"sgs_{secrets.token_urlsafe(32)}"
+    api_key = ApiKey(name=name, key_hash=hash_key(plaintext))
+    session.add(api_key)
+    session.commit()
+    return api_key, plaintext
 
 
 def require_api_key(
