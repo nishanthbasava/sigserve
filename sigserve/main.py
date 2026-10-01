@@ -1,8 +1,9 @@
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException
-from fastapi.responses import RedirectResponse
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, RedirectResponse
 from rq import Callback, Queue
 from rq.command import send_stop_job_command
 from sqlalchemy import select
@@ -21,6 +22,42 @@ app = FastAPI(title="SigServe", version="0.1.0")
 QueueDep = Annotated[Queue, Depends(get_queue)]
 SessionDep = Annotated[Session, Depends(get_session)]
 AuthDep = Annotated[ApiKey, Depends(require_api_key)]
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    # The default handler echoes the invalid input back; for a matrix
+    # submission that is the entire matrix, so keep only loc/msg/type.
+    detail = [
+        {"loc": error.get("loc", []), "msg": error.get("msg", ""), "type": error.get("type", "")}
+        for error in exc.errors()
+    ]
+    return JSONResponse(status_code=422, content={"detail": detail})
+
+
+def _queue_position(queue: Queue, job: Job) -> int | None:
+    if job.status != "queued":
+        return None
+    try:
+        position = queue.get_job_position(job.id)
+    except Exception:
+        return None
+    return position + 1 if position is not None else None
+
+
+def _job_status(job: Job, queue: Queue | None = None) -> JobStatus:
+    return JobStatus(
+        id=job.id,
+        status=job.status,
+        error=job.error,
+        params=job.params,
+        n_mutation_types=job.n_mutation_types,
+        n_samples=job.n_samples,
+        created_at=job.created_at,
+        started_at=job.started_at,
+        finished_at=job.finished_at,
+        queue_position=_queue_position(queue, job) if queue is not None else None,
+    )
 
 
 @app.get("/", include_in_schema=False)
@@ -55,7 +92,7 @@ def submit_job(
         job_timeout=get_settings().job_timeout_seconds,
         on_failure=Callback(mark_job_failed),
     )
-    return JobStatus(id=job.id, status=job.status)
+    return _job_status(job, queue)
 
 
 @app.get("/jobs", response_model=list[JobSummary])
@@ -64,19 +101,29 @@ def list_jobs(session: SessionDep, api_key: AuthDep) -> list[JobSummary]:
         select(Job).where(Job.api_key_id == api_key.id).order_by(Job.created_at.desc())
     ).all()
     return [
-        JobSummary(id=j.id, status=j.status, created_at=j.created_at, finished_at=j.finished_at)
+        JobSummary(
+            id=j.id,
+            status=j.status,
+            params=j.params,
+            n_mutation_types=j.n_mutation_types,
+            n_samples=j.n_samples,
+            error=j.error,
+            created_at=j.created_at,
+            started_at=j.started_at,
+            finished_at=j.finished_at,
+        )
         for j in jobs
     ]
 
 
 @app.get("/jobs/{job_id}", response_model=JobStatus)
-def get_job(job_id: str, session: SessionDep, api_key: AuthDep) -> JobStatus:
+def get_job(job_id: str, session: SessionDep, queue: QueueDep, api_key: AuthDep) -> JobStatus:
     job = session.get(Job, job_id)
     # A foreign job returns the same 404 as a missing one, so job ids
     # cannot be probed for existence.
     if job is None or job.api_key_id != api_key.id:
         raise HTTPException(status_code=404, detail="Job not found")
-    return JobStatus(id=job.id, status=job.status, error=job.error)
+    return _job_status(job, queue)
 
 
 @app.get("/jobs/{job_id}/results", response_model=JobResult)
@@ -119,4 +166,4 @@ def cancel_job(
                 pass
         else:
             rq_job.cancel()
-    return JobStatus(id=job.id, status=job.status, error=job.error)
+    return _job_status(job)

@@ -81,6 +81,36 @@ def test_failed_job_records_error(client: TestClient, monkeypatch: pytest.Monkey
     assert "sampler exploded" in body["error"]
 
 
+def test_status_and_list_expose_job_metadata(client: TestClient) -> None:
+    payload = {"matrix": [[1, 2, 3], [4, 5, 6]], "params": {"rank": 2}}
+    submitted = client.post("/jobs", json=payload).json()
+    assert submitted["params"]["rank"] == 2
+    assert submitted["created_at"] is not None
+
+    body = client.get(f"/jobs/{submitted['id']}").json()
+    assert body["n_mutation_types"] == 2
+    assert body["n_samples"] == 3
+    assert body["started_at"] is not None
+    assert body["finished_at"] is not None
+    # Jobs run inline under the test queue, so nothing is ever queued.
+    assert body["queue_position"] is None
+
+    (summary,) = client.get("/jobs").json()
+    assert summary["id"] == submitted["id"]
+    assert summary["params"]["rank"] == 2
+    assert summary["n_samples"] == 3
+    assert summary["started_at"] is not None
+
+
+def test_validation_error_omits_matrix_echo(client: TestClient) -> None:
+    payload = {"matrix": [[1, 2], [3, -4]], "params": {"rank": 1}}
+    response = client.post("/jobs", json=payload)
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert any("non-negative" in error["msg"] for error in detail)
+    assert all("input" not in error for error in detail)
+
+
 def test_get_unknown_job(client: TestClient) -> None:
     response = client.get("/jobs/does-not-exist")
     assert response.status_code == 404

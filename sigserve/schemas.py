@@ -46,7 +46,12 @@ class JobSubmission(BaseModel):
 class JobSummary(BaseModel):
     id: str
     status: str
+    params: dict[str, Any]
+    n_mutation_types: int | None = None
+    n_samples: int | None = None
+    error: str | None = None
     created_at: datetime
+    started_at: datetime | None = None
     finished_at: datetime | None = None
 
 
@@ -54,6 +59,15 @@ class JobStatus(BaseModel):
     id: str
     status: str
     error: str | None = None
+    params: dict[str, Any] | None = None
+    n_mutation_types: int | None = None
+    n_samples: int | None = None
+    created_at: datetime | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    # 1-based position among queued jobs; only set while status is "queued"
+    # and the job is still known to the queue.
+    queue_position: int | None = None
 
 
 class JobResult(BaseModel):
