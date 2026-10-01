@@ -16,6 +16,9 @@ venv/
 .coverage
 htmlcov/
 
+# Frontend
+node_modules/
+
 # Editors / OS
 .idea/
 .vscode/
