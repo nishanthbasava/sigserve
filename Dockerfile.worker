@@ -25,5 +25,7 @@ RUN python3 -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir ".[worker]"
 
 ENV PATH="/opt/venv/bin:$PATH"
+# Recorded in each job's diagnostics for reproducibility.
+ENV BAYESNMF_REF=${BAYESNMF_REF}
 
 CMD ["rq", "worker", "sigserve", "--url", "redis://redis:6379/0"]

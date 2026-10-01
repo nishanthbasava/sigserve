@@ -61,7 +61,7 @@ def test_job_row_records_matrix_dims(client: TestClient) -> None:
 
 
 def test_failed_job_records_error(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    def boom(matrix: list[list[int]], params: dict[str, Any]) -> dict[str, Any]:
+    def boom(job_id: str, matrix: list[list[int]], params: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError("sampler exploded")
 
     monkeypatch.setattr(tasks, "_compute", boom)

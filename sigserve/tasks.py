@@ -24,7 +24,7 @@ def run_job(job_id: str) -> dict[str, Any]:
     # No session is held open during the sampler run; it can take minutes
     # and would otherwise pin a database connection the whole time.
     try:
-        result = _compute(matrix, params)
+        result = _compute(job_id, matrix, params)
     except Exception as exc:
         _finalize(job_id, "failed", error=str(exc))
         raise
@@ -60,5 +60,5 @@ def _finalize(
         session.commit()
 
 
-def _compute(matrix: list[list[int]], params: dict[str, Any]) -> dict[str, Any]:
-    return sampler.run_bayesnmf(matrix, params).to_dict()
+def _compute(job_id: str, matrix: list[list[int]], params: dict[str, Any]) -> dict[str, Any]:
+    return sampler.run_bayesnmf(matrix, params, job_id=job_id).to_dict()

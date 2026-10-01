@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -8,8 +8,24 @@ MAX_SAMPLES = 2000
 
 
 class SamplerParams(BaseModel):
-    rank: int = Field(default=5, ge=1, le=20)
+    # A fixed rank takes precedence; otherwise bayesNMF learns the rank
+    # over [rank_min, rank_max] (SBFI).
+    rank: int | None = Field(default=None, ge=1, le=20)
+    rank_min: int = Field(default=2, ge=1, le=20)
+    rank_max: int = Field(default=8, ge=1, le=20)
     max_iters: int = Field(default=2000, ge=100, le=20000)
+    # Seeds R's RNG so a run can be repeated exactly.
+    seed: int | None = Field(default=None, ge=0, le=2_147_483_647)
+    likelihood: Literal["poisson", "normal"] = "poisson"
+    prior: Literal["truncnormal", "exponential", "gamma"] = "truncnormal"
+
+    @model_validator(mode="after")
+    def resolve_rank_range(self) -> "SamplerParams":
+        if self.rank is not None:
+            self.rank_min = self.rank_max = self.rank
+        elif self.rank_min > self.rank_max:
+            raise ValueError("rank_min must not exceed rank_max")
+        return self
 
 
 class JobSubmission(BaseModel):
@@ -41,7 +57,7 @@ class JobSubmission(BaseModel):
             raise ValueError("matrix entries must be non-negative counts")
 
         max_rank = min(len(self.matrix), width)
-        if self.params.rank > max_rank:
+        if self.params.rank_max > max_rank:
             raise ValueError(
                 f"rank must not exceed the smaller matrix dimension ({max_rank})"
             )
