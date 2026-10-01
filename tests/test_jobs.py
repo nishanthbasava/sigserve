@@ -68,13 +68,13 @@ def test_failed_job_records_error(client: TestClient, monkeypatch: pytest.Monkey
 
     with open_session() as session:
         key_id = session.scalar(select(ApiKey.id))
-        job = Job(params={"rank": 2}, api_key_id=key_id)
+        job = Job(params={"rank": 2}, api_key_id=key_id, matrix=[[1]])
         session.add(job)
         session.commit()
         job_id = job.id
 
     with pytest.raises(RuntimeError):
-        tasks.run_job(job_id, [[1]], {"rank": 2})
+        tasks.run_job(job_id)
 
     body = client.get(f"/jobs/{job_id}").json()
     assert body["status"] == "failed"
@@ -100,6 +100,39 @@ def test_status_and_list_expose_job_metadata(client: TestClient) -> None:
     assert summary["params"]["rank"] == 2
     assert summary["n_samples"] == 3
     assert summary["started_at"] is not None
+
+
+def test_name_and_labels_round_trip(client: TestClient) -> None:
+    payload = {
+        "matrix": [[1, 2], [3, 4], [5, 6]],
+        "params": {"rank": 2},
+        "name": "my cohort",
+        "mutation_types": ["A[C>A]A", "A[C>A]C", "A[C>A]G"],
+        "sample_names": ["s1", "s2"],
+    }
+    job_id = client.post("/jobs", json=payload).json()["id"]
+
+    assert client.get(f"/jobs/{job_id}").json()["name"] == "my cohort"
+    (summary,) = client.get("/jobs").json()
+    assert summary["name"] == "my cohort"
+
+    body = client.get(f"/jobs/{job_id}/results").json()
+    assert body["name"] == "my cohort"
+    assert body["params"]["rank"] == 2
+    assert body["labels"]["mutation_types"][0] == "A[C>A]A"
+    assert body["labels"]["sample_names"] == ["s1", "s2"]
+    assert body["finished_at"] is not None
+
+
+def test_mismatched_labels_rejected(client: TestClient) -> None:
+    payload = {
+        "matrix": [[1, 2], [3, 4]],
+        "params": {"rank": 1},
+        "sample_names": ["only-one"],
+    }
+    response = client.post("/jobs", json=payload)
+    assert response.status_code == 422
+    assert any("sample_names" in error["msg"] for error in response.json()["detail"])
 
 
 def test_validation_error_omits_matrix_echo(client: TestClient) -> None:

@@ -17,6 +17,11 @@ class JobSubmission(BaseModel):
         description="Mutation-count matrix; rows are mutation types, columns are samples"
     )
     params: SamplerParams = SamplerParams()
+    name: str | None = Field(default=None, max_length=200, description="Dataset name")
+    mutation_types: list[str] | None = Field(
+        default=None, description="Row labels, e.g. the 96 trinucleotide contexts"
+    )
+    sample_names: list[str] | None = Field(default=None, description="Column labels")
 
     @model_validator(mode="after")
     def validate_matrix(self) -> "JobSubmission":
@@ -40,12 +45,32 @@ class JobSubmission(BaseModel):
             raise ValueError(
                 f"rank must not exceed the smaller matrix dimension ({max_rank})"
             )
+
+        if self.mutation_types is not None and len(self.mutation_types) != len(self.matrix):
+            raise ValueError(
+                f"mutation_types has {len(self.mutation_types)} labels "
+                f"for {len(self.matrix)} matrix rows"
+            )
+        if self.sample_names is not None and len(self.sample_names) != width:
+            raise ValueError(
+                f"sample_names has {len(self.sample_names)} labels "
+                f"for {width} matrix columns"
+            )
         return self
+
+    def label_dict(self) -> dict[str, list[str]] | None:
+        labels = {}
+        if self.mutation_types is not None:
+            labels["mutation_types"] = self.mutation_types
+        if self.sample_names is not None:
+            labels["sample_names"] = self.sample_names
+        return labels or None
 
 
 class JobSummary(BaseModel):
     id: str
     status: str
+    name: str | None = None
     params: dict[str, Any]
     n_mutation_types: int | None = None
     n_samples: int | None = None
@@ -58,8 +83,10 @@ class JobSummary(BaseModel):
 class JobStatus(BaseModel):
     id: str
     status: str
+    name: str | None = None
     error: str | None = None
     params: dict[str, Any] | None = None
+    progress: dict[str, Any] | None = None
     n_mutation_types: int | None = None
     n_samples: int | None = None
     created_at: datetime | None = None
@@ -71,5 +98,13 @@ class JobStatus(BaseModel):
 
 
 class JobResult(BaseModel):
+    """Self-contained result payload: everything a shared results page
+    needs to render and label plots without a second request."""
+
     id: str
+    name: str | None = None
+    params: dict[str, Any] | None = None
+    labels: dict[str, Any] | None = None
+    created_at: datetime | None = None
+    finished_at: datetime | None = None
     result: dict[str, Any]

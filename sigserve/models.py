@@ -33,7 +33,17 @@ class Job(Base):
         String(36), ForeignKey("api_keys.id"), index=True
     )
     status: Mapped[str] = mapped_column(String(20), default="queued")
+    # Optional human-readable dataset name, shown in the jobs table.
+    name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     params: Mapped[dict[str, Any]] = mapped_column(JSON)
+    # Axis labels for plotting: {"mutation_types": [...], "sample_names": [...]}.
+    labels: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    # The submitted counts matrix. Persisted so results pages are
+    # self-contained and failed jobs can be re-run with identical input;
+    # previously it lived only in the transient RQ payload.
+    matrix: Mapped[list[list[int]] | None] = mapped_column(JSON, nullable=True)
+    # Worker-written progress: {"stage": ..., "log_tail": [...], "updated_at": ...}.
+    progress: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     # Matrix dimensions, kept out of params so analytics can filter and
     # bucket on them without unpacking JSON. Nullable: jobs predating the
     # columns have no recorded shape.

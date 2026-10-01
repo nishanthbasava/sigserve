@@ -49,7 +49,9 @@ def _job_status(job: Job, queue: Queue | None = None) -> JobStatus:
     return JobStatus(
         id=job.id,
         status=job.status,
+        name=job.name,
         error=job.error,
+        progress=job.progress,
         params=job.params,
         n_mutation_types=job.n_mutation_types,
         n_samples=job.n_samples,
@@ -77,22 +79,28 @@ def submit_job(
     job = Job(
         params=submission.params.model_dump(),
         api_key_id=api_key.id,
+        name=submission.name,
+        labels=submission.label_dict(),
+        matrix=submission.matrix,
         n_mutation_types=len(submission.matrix),
         n_samples=len(submission.matrix[0]),
     )
     session.add(job)
     session.commit()
+    _enqueue(queue, job.id)
+    return _job_status(job, queue)
 
+
+def _enqueue(queue: Queue, job_id: str) -> None:
+    # The worker loads matrix and params from the job row, so the Redis
+    # payload stays small regardless of matrix size.
     queue.enqueue(
         run_job,
-        job.id,
-        submission.matrix,
-        submission.params.model_dump(),
-        job_id=job.id,
+        job_id,
+        job_id=job_id,
         job_timeout=get_settings().job_timeout_seconds,
         on_failure=Callback(mark_job_failed),
     )
-    return _job_status(job, queue)
 
 
 @app.get("/jobs", response_model=list[JobSummary])
@@ -104,6 +112,7 @@ def list_jobs(session: SessionDep, api_key: AuthDep) -> list[JobSummary]:
         JobSummary(
             id=j.id,
             status=j.status,
+            name=j.name,
             params=j.params,
             n_mutation_types=j.n_mutation_types,
             n_samples=j.n_samples,
@@ -136,7 +145,15 @@ def get_job_results(job_id: str, session: SessionDep, api_key: AuthDep) -> JobRe
             status_code=409,
             detail=f"Job is {job.status}; results are available once finished",
         )
-    return JobResult(id=job.id, result=job.result)
+    return JobResult(
+        id=job.id,
+        name=job.name,
+        params=job.params,
+        labels=job.labels,
+        created_at=job.created_at,
+        finished_at=job.finished_at,
+        result=job.result,
+    )
 
 
 @app.delete("/jobs/{job_id}", response_model=JobStatus)

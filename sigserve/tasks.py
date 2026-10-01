@@ -8,11 +8,15 @@ from sigserve.models import Job
 TERMINAL_STATUSES = ("finished", "failed", "canceled")
 
 
-def run_job(job_id: str, matrix: list[list[int]], params: dict[str, Any]) -> dict[str, Any]:
+def run_job(job_id: str) -> dict[str, Any]:
     with open_session() as session:
         job = session.get(Job, job_id)
         if job is None:
             raise ValueError(f"Job {job_id} has no database record")
+        if job.matrix is None:
+            raise ValueError(f"Job {job_id} has no stored input matrix")
+        matrix = job.matrix
+        params = job.params
         job.status = "running"
         job.started_at = datetime.now(UTC)
         session.commit()
@@ -51,6 +55,7 @@ def _finalize(
         job.status = status
         job.result = result
         job.error = error
+        job.progress = None
         job.finished_at = datetime.now(UTC)
         session.commit()
 
