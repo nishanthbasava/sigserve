@@ -1,9 +1,29 @@
-// Validated palette (dataviz reference instance); both modes passed the
-// six-check validator against their surfaces. Charts read concrete hex
-// through usePalette() because SVG presentation attributes cannot
-// resolve CSS custom properties.
+// Chart palette. Substitution classes use the standard COSMIC SBS colors
+// so signature plots read the same here as in the literature; those six
+// colors are also the signature series for the exposures chart. Charts
+// read concrete hex through usePalette() because SVG presentation
+// attributes cannot resolve CSS custom properties.
 
 import { useEffect, useState } from "react";
+
+// Standard COSMIC class colors, in canonical order C>A C>G C>T T>A T>C T>G.
+// `ink` is a text color that meets WCAG AA on the class swatch.
+const CLASSES = [
+  { name: "C>A", fill: "#03bcee", ink: "#0b0b0b" },
+  { name: "C>G", fill: "#010101", ink: "#ffffff" },
+  { name: "C>T", fill: "#e32926", ink: "#ffffff" },
+  { name: "T>A", fill: "#cac9c9", ink: "#0b0b0b" },
+  { name: "T>C", fill: "#a1ce63", ink: "#0b0b0b" },
+  { name: "T>G", fill: "#ebc6c4", ink: "#0b0b0b" },
+];
+
+// On dark surfaces #010101 vanishes: lift C>G to a near-black and give its
+// marks a light outline so the bars stay visible without changing the hue.
+const CLASSES_DARK = CLASSES.map((entry) =>
+  entry.name === "C>G"
+    ? { ...entry, fill: "#3d3d3d", stroke: "rgba(255, 255, 255, 0.55)" }
+    : entry
+);
 
 const LIGHT = {
   surface: "#fcfcfb",
@@ -12,7 +32,9 @@ const LIGHT = {
   muted: "#898781",
   grid: "#e1e0d9",
   axis: "#c3c2b7",
-  series: ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"],
+  accent: "#0277a8",
+  classes: CLASSES,
+  series: CLASSES.map((entry) => entry.fill),
   good: "#0ca30c",
   critical: "#d03b3b",
 };
@@ -24,7 +46,9 @@ const DARK = {
   muted: "#898781",
   grid: "#2c2c2a",
   axis: "#383835",
-  series: ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"],
+  accent: "#03bcee",
+  classes: CLASSES_DARK,
+  series: CLASSES_DARK.map((entry) => entry.fill),
   good: "#0ca30c",
   critical: "#d03b3b",
 };
@@ -40,8 +64,9 @@ export function usePalette() {
   return dark ? DARK : LIGHT;
 }
 
-// Signature index -> color. Beyond eight signatures a cycled hue would
-// be unreadable; fall back to an ordered single-hue ramp.
+// Signature index -> color. Up to six signatures reuse the class colors;
+// beyond that a cycled hue would be unreadable, so fall back to an
+// ordered single-hue ramp.
 const ORDINAL_BLUES = ["#86b6ef", "#6da7ec", "#5598e7", "#3987e5", "#2a78d6", "#256abf", "#1c5cab", "#184f95", "#104281", "#0d366b"];
 
 export function seriesColor(palette, index, total) {
