@@ -1,4 +1,7 @@
-/* One accent, lots of whitespace; tables and plots are the content. */
+/* Hairline borders, 4px radii, no shadows; tables and plots are the
+   content. Accents come from the six COSMIC substitution-class colors
+   (interactive accent = C>A cyan, darkened in light mode for AA text
+   contrast); numbers, IDs, and code are monospace. */
 
 :root {
   color-scheme: light;
@@ -9,11 +12,20 @@
   --muted: #898781;
   --grid: #e1e0d9;
   --axis: #c3c2b7;
-  --accent: #2a78d6;
+  --accent: #0277a8;
   --accent-ink: #ffffff;
   --good: #0ca30c;
   --critical: #d03b3b;
   --border: rgba(11, 11, 11, 0.1);
+  --radius: 4px;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* COSMIC substitution-class colors, canonical order */
+  --class-ca: #03bcee;
+  --class-cg: #010101;
+  --class-ct: #e32926;
+  --class-ta: #cac9c9;
+  --class-tc: #a1ce63;
+  --class-tg: #ebc6c4;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -26,9 +38,18 @@
     --muted: #898781;
     --grid: #2c2c2a;
     --axis: #383835;
-    --accent: #3987e5;
+    --accent: #03bcee;
+    --accent-ink: #0b0b0b;
     --border: rgba(255, 255, 255, 0.1);
+    /* lifted near-black so C>G stays visible on dark surfaces */
+    --class-cg: #3d3d3d;
   }
+}
+
+.mono,
+code,
+pre {
+  font-family: var(--font-mono);
 }
 
 * {
@@ -100,14 +121,14 @@ h2 {
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius);
   padding: 20px;
 }
 
 /* Dropzone */
 .dropzone {
-  border: 2px dashed var(--axis);
-  border-radius: 10px;
+  border: 1px dashed var(--axis);
+  border-radius: var(--radius);
   padding: 40px 24px;
   text-align: center;
   color: var(--ink-2);
@@ -158,7 +179,7 @@ h2 {
   background: var(--surface);
   color: var(--ink);
   border: 1px solid var(--axis);
-  border-radius: 6px;
+  border-radius: var(--radius);
   padding: 7px 10px;
   font: inherit;
   width: 130px;
@@ -185,7 +206,7 @@ details.advanced summary {
 
 button {
   font: inherit;
-  border-radius: 7px;
+  border-radius: var(--radius);
   border: 1px solid var(--axis);
   background: var(--surface);
   color: var(--ink);
@@ -217,7 +238,7 @@ button.subtle {
   background: color-mix(in srgb, var(--critical) 8%, var(--surface));
   border: 1px solid color-mix(in srgb, var(--critical) 40%, transparent);
   color: var(--ink);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 12px 14px;
   margin: 14px 0;
   white-space: pre-wrap;
@@ -226,7 +247,7 @@ button.subtle {
 .ok-box {
   background: color-mix(in srgb, var(--good) 8%, var(--surface));
   border: 1px solid color-mix(in srgb, var(--good) 35%, transparent);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 12px 14px;
   margin: 14px 0;
   font-size: 14px;
@@ -238,7 +259,7 @@ table {
   border-collapse: collapse;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius);
   overflow: hidden;
 }
 th,
@@ -276,7 +297,7 @@ tr.clickable:hover td {
   font-size: 13px;
   font-weight: 600;
   padding: 2px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius);
   border: 1px solid var(--border);
   color: var(--ink-2);
 }
@@ -334,7 +355,7 @@ tr.clickable:hover td {
 .log-tail {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 12px 14px;
   font: 12.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
   color: var(--ink-2);
@@ -355,7 +376,7 @@ tr.clickable:hover td {
 .chart-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius);
   padding: 16px 18px 8px;
   margin: 14px 0;
   overflow-x: auto;
@@ -400,4 +421,125 @@ tr.clickable:hover td {
 
 a {
   color: var(--accent);
+}
+
+/* Landing layout */
+.landing-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px 40px;
+  align-items: start;
+}
+@media (max-width: 920px) {
+  .landing-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.column-title {
+  margin-top: 4px;
+}
+
+/* curl example */
+.curl-block {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.curl-block pre {
+  margin: 0;
+  padding: 14px 70px 14px 16px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  overflow-x: auto;
+  color: var(--ink-2);
+}
+.copy-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 12px;
+  padding: 3px 10px;
+  color: var(--ink-2);
+}
+
+/* CSV format preview */
+.csv-preview {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.csv-preview table {
+  border: none;
+  border-radius: 0;
+}
+.csv-preview th,
+.csv-preview td {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+.csv-preview .ellipsis {
+  color: var(--muted);
+  font-style: normal;
+}
+
+/* Chart headers and COSMIC matches */
+.chart-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+  margin-bottom: 4px;
+}
+.chart-head h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.cosmic-match {
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.cosmic-match b {
+  color: var(--ink);
+}
+
+/* Structured failure report */
+.error-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 14px;
+  font-weight: 600;
+}
+.error-kind {
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--critical);
+}
+.error-detail {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  color: var(--ink-2);
+  overflow-x: auto;
+}
+
+/* Monospace numerals */
+td.num,
+.hero .number,
+.meta-row b,
+.topbar .version {
+  font-family: var(--font-mono);
+}
+td.mono {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.note {
+  font-size: 12.5px;
+  color: var(--muted);
 }
