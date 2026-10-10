@@ -1,9 +1,11 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { getSharedJob, getSharedResults, isTerminal, rerunJob } from "./api.js";
-import { ClassLegend, ExposuresChart, SignatureChart, TraceChart } from "./charts.jsx";
+import { ExposuresChart, TraceChart } from "./charts.jsx";
+import { fetchCosmicCatalog, nearestCosmic } from "./cosmic.js";
 import { downloadFile, exposuresCsv, signaturesCsv } from "./csv.js";
+import SbsPlot from "./SbsPlot.jsx";
 import { formatDuration, formatWhen } from "./time.js";
 
 export default function JobDetailPage({ jobId }) {
@@ -46,6 +48,9 @@ function MetaRow({ job }) {
   const params = job.params ?? {};
   return (
     <div className="meta-row">
+      <span>
+        id <b className="mono">{job.id.slice(0, 8)}</b>
+      </span>
       <span>
         submitted <b>{formatWhen(job.created_at)}</b>
       </span>
@@ -92,19 +97,36 @@ function useElapsed(job) {
   return formatDuration((end - new Date(start)) / 1000);
 }
 
+// Best-effort iteration extracted from the sampler's own log tail; the
+// API exposes no iteration counter, so absence of a match shows nothing.
+function iterationFromLog(logTail) {
+  if (!logTail) return null;
+  for (let i = logTail.length - 1; i >= 0; i -= 1) {
+    const match = logTail[i].match(/\biter(?:ation)?s?\s*[:=]?\s*(\d+)/i);
+    if (match) return Number(match[1]);
+  }
+  return null;
+}
+
 function Live({ job }) {
   const elapsed = useElapsed(job);
+  const iteration = iterationFromLog(job.progress?.log_tail);
   return (
     <div>
       {job.status === "queued" ? (
         <div className="ok-box">
-          Queued{job.queue_position != null ? ` — position ${job.queue_position} in line` : ""}.
-          Waiting for a worker; this page updates automatically.
+          Queued{job.queue_position != null ? ` — position ${job.queue_position} in line` : ""},
+          submitted {formatWhen(job.created_at)}. Waiting for a worker; this page updates every
+          few seconds.
         </div>
       ) : (
         <div className="ok-box">
-          Sampling for <b>{elapsed}</b>. Gibbs sampling takes minutes on real data — leave this
-          page open or come back to the same URL.
+          Sampling for <b>{elapsed}</b>
+          {job.started_at ? ` (started ${formatWhen(job.started_at)})` : ""}
+          {job.progress?.stage ? ` — stage: ${job.progress.stage}` : ""}
+          {iteration != null ? `, around iteration ${iteration.toLocaleString()} per the log` : ""}.
+          Gibbs sampling takes minutes on real data — leave this page open or come back to the
+          same URL.
         </div>
       )}
       {job.progress?.log_tail?.length > 0 && (
@@ -141,10 +163,18 @@ function RerunButton({ jobId }) {
 }
 
 function NotFinished({ job }) {
+  // Worker failures are recorded as "ExceptionName: message".
+  const match = job.error?.match(/^([A-Za-z_][A-Za-z0-9_.]*(?:Error|Exception|Timeout[A-Za-z]*)):\s*([\s\S]*)$/);
   return (
     <div>
       {job.status === "failed" ? (
-        <div className="error-box">{job.error || "The job failed without a message."}</div>
+        <div className="error-box">
+          <div className="error-head">
+            Job failed{job.finished_at ? ` ${formatWhen(job.finished_at)}` : ""}
+            {match && <span className="mono error-kind">{match[1]}</span>}
+          </div>
+          <pre className="error-detail">{match ? match[2] : job.error || "The job failed without a message."}</pre>
+        </div>
       ) : (
         <div className="ok-box">This job was canceled.</div>
       )}
@@ -166,8 +196,21 @@ function Results({ jobId, job }) {
     queryKey: ["results", jobId],
     queryFn: () => getSharedResults(jobId),
   });
+  // Similarity is computed client-side against the bundled catalog;
+  // if the catalog fails to load the panel is simply omitted.
+  const { data: catalog } = useQuery({
+    queryKey: ["cosmic-catalog"],
+    queryFn: fetchCosmicCatalog,
+    staleTime: Infinity,
+    retry: 1,
+  });
   const [metric, setMetric] = useState("logposterior");
   const [copied, setCopied] = useState(false);
+
+  const cosmicMatches = useMemo(() => {
+    if (!data || !catalog) return null;
+    return nearestCosmic(catalog, data.result.signatures, data.labels?.mutation_types ?? null);
+  }, [data, catalog]);
 
   if (error) return <div className="error-box">{error.message}</div>;
   if (!data) return <div className="empty">Loading results…</div>;
@@ -183,7 +226,7 @@ function Results({ jobId, job }) {
       <div className="hero">
         <span className="number">{estimatedRank}</span>
         <span className="label">
-          estimated rank
+          learned rank
           {diagnostics.rank_min !== diagnostics.rank_max &&
             diagnostics.rank_min != null &&
             ` (searched ${diagnostics.rank_min}–${diagnostics.rank_max})`}
@@ -245,15 +288,33 @@ function Results({ jobId, job }) {
       </div>
 
       <h2>Signature profiles</h2>
-      <ClassLegend />
       {Array.from({ length: rank }, (_, k) => (
-        <SignatureChart
+        <SbsPlot
           key={k}
           title={`Signature ${k + 1}`}
           profile={signatures.map((row) => row[k])}
-          mutationTypes={labels.mutation_types}
+          contexts={labels.mutation_types}
+          meta={
+            cosmicMatches?.[k]?.length > 0 && (
+              <span className="cosmic-match">
+                nearest COSMIC:{" "}
+                {cosmicMatches[k].map((entry, i) => (
+                  <span key={entry.name}>
+                    {i > 0 && ", "}
+                    <b>{entry.name}</b> <span className="mono">{entry.similarity.toFixed(3)}</span>
+                  </span>
+                ))}
+              </span>
+            )
+          }
         />
       ))}
+      {cosmicMatches && catalog && (
+        <p className="note">
+          Cosine similarity against {catalog.version}, computed in the browser. Similarity alone
+          does not establish aetiology.
+        </p>
+      )}
 
       <ExposuresChart exposures={exposures} sampleNames={labels.sample_names} />
 
