@@ -1,14 +1,12 @@
-// Chart components (Recharts). Forms: 96-context signature bars colored
-// by substitution class, stacked exposures per sample, single-series
-// convergence trace. Palette is the validated reference instance; the
-// light-mode contrast WARN slots get relief via the printed class
-// legend, per-mark tooltips, and the CSV table downloads.
+// Recharts components: stacked exposures per sample and the single-series
+// convergence trace. Signature profiles are drawn by SbsPlot (plain SVG).
+// Low-contrast class colors get relief via printed labels, per-mark
+// tooltips, and the CSV table downloads.
 
 import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -17,7 +15,6 @@ import {
   YAxis,
 } from "recharts";
 
-import { SUBSTITUTIONS, substitutionOf } from "./csv.js";
 import { seriesColor, usePalette } from "./palette.js";
 
 const tooltipStyle = (palette) => ({
@@ -27,58 +24,6 @@ const tooltipStyle = (palette) => ({
   fontSize: 12.5,
   color: palette.ink,
 });
-
-export function ClassLegend() {
-  const palette = usePalette();
-  return (
-    <div className="class-legend">
-      {SUBSTITUTIONS.map((substitution, index) => (
-        <span key={substitution}>
-          <span className="swatch" style={{ background: palette.series[index] }} />
-          {substitution}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-export function SignatureChart({ profile, mutationTypes, title }) {
-  const palette = usePalette();
-  const data = profile.map((value, i) => ({
-    context: mutationTypes?.[i] ?? `type ${i + 1}`,
-    value,
-  }));
-  return (
-    <div className="chart-card">
-      <h3>{title}</h3>
-      <ResponsiveContainer width="100%" height={140} minWidth={560}>
-        <BarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 4 }} barCategoryGap={1}>
-          <XAxis dataKey="context" tick={false} axisLine={{ stroke: palette.axis }} height={6} />
-          <YAxis
-            width={44}
-            tick={{ fill: palette.muted, fontSize: 11 }}
-            axisLine={false}
-            tickLine={false}
-            tickFormatter={(value) => (value === 0 ? "0" : Number(value).toPrecision(2))}
-          />
-          <Tooltip
-            cursor={{ fill: "transparent" }}
-            contentStyle={tooltipStyle(palette)}
-            formatter={(value) => [value.toFixed(4), "proportion"]}
-          />
-          <Bar dataKey="value" isAnimationActive={false} radius={[2, 2, 0, 0]}>
-            {data.map((entry) => (
-              <Cell
-                key={entry.context}
-                fill={palette.series[SUBSTITUTIONS.indexOf(substitutionOf(entry.context))]}
-              />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
 
 export function ExposuresChart({ exposures, sampleNames }) {
   const palette = usePalette();
@@ -181,7 +126,7 @@ export function TraceChart({ trace, metric }) {
         <Line
           type="monotone"
           dataKey="value"
-          stroke={palette.series[0]}
+          stroke={palette.accent}
           strokeWidth={2}
           dot={false}
           isAnimationActive={false}
