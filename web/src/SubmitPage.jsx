@@ -1,8 +1,9 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 
 import { submitJob } from "./api.js";
 import { parseMatrixCsv } from "./csv.js";
+import SbsPlot from "./SbsPlot.jsx";
 
 const DEFAULTS = {
   rankMin: 2,
@@ -13,6 +14,102 @@ const DEFAULTS = {
   likelihood: "poisson",
   prior: "truncnormal",
 };
+
+const curlExample = (origin) => `# mint an API key
+curl -sX POST ${origin}/api/keys -H 'Content-Type: application/json' -d '{}'
+
+# submit: matrix rows are mutation types, columns are samples
+curl -sX POST ${origin}/api/jobs \\
+  -H 'Content-Type: application/json' -H "X-API-Key: $KEY" \\
+  -d '{"matrix": [[12,3],[5,8],[9,1]], "params": {"rank": 2, "max_iters": 2000}}'
+
+# poll status, then fetch results (409 until finished)
+curl -s ${origin}/api/jobs/$JOB -H "X-API-Key: $KEY"
+curl -s ${origin}/api/jobs/$JOB/results -H "X-API-Key: $KEY"`;
+
+function CopyButton({ text }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      className="copy-button"
+      onClick={() => {
+        navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+    >
+      {copied ? "Copied" : "Copy"}
+    </button>
+  );
+}
+
+// First rows and columns of the bundled sample CSV, so the expected file
+// format is shown with real values rather than described in prose.
+function CsvPreview() {
+  const { data } = useQuery({
+    queryKey: ["sample-csv"],
+    queryFn: async () => (await fetch("/sample-dataset.csv")).text(),
+    staleTime: Infinity,
+  });
+  if (!data) return null;
+  const rows = data.trim().split("\n").slice(0, 4).map((line) => line.split(","));
+  const nColumns = 5;
+  return (
+    <div className="csv-preview">
+      <table>
+        <thead>
+          <tr>
+            {rows[0].slice(0, nColumns).map((cell) => (
+              <th key={cell}>{cell}</th>
+            ))}
+            <th className="ellipsis">… 96 context columns</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.slice(1).map((row) => (
+            <tr key={row[0]}>
+              {row.slice(0, nColumns).map((cell, index) => (
+                <td key={index}>{cell}</td>
+              ))}
+              <td className="ellipsis">…</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// The sample dataset's planted ground truth, rendered with the same plot
+// component the results page uses.
+function ExampleOutput() {
+  const { data } = useQuery({
+    queryKey: ["sample-signatures"],
+    queryFn: async () => {
+      const response = await fetch("/sample-signatures.json");
+      if (!response.ok) throw new Error("sample signatures unavailable");
+      return response.json();
+    },
+    staleTime: Infinity,
+  });
+  if (!data) return null;
+  return (
+    <>
+      {data.signatures.map((signature) => (
+        <SbsPlot
+          key={signature.name}
+          title={signature.name}
+          profile={signature.profile}
+          contexts={data.contexts}
+          plotHeight={110}
+          showContextLabels={false}
+          labelScale={2}
+        />
+      ))}
+    </>
+  );
+}
 
 export default function SubmitPage() {
   const [dataset, setDataset] = useState(null); // {matrix, mutationTypes, sampleNames, source}
@@ -83,49 +180,83 @@ export default function SubmitPage() {
   }
 
   const set = (key) => (event) => setParams({ ...params, [key]: event.target.value });
+  const curl = curlExample(window.location.origin);
 
   return (
     <div>
-      <h1>Run bayesNMF on your mutation counts</h1>
-      <p className="subtitle">
-        Upload a CSV with one row per sample and one column per trinucleotide context (96
-        columns). Sampling runs on our workers — no R, no install.
-      </p>
+      <div className="landing-grid">
+        <section>
+          <h1>Mutational signatures from a CSV of mutation counts</h1>
+          <p className="subtitle">
+            Upload one row per sample and one column per trinucleotide context (96 columns). Runs
+            the bayesNMF Gibbs sampler server-side. Returns signatures, exposures, and posterior
+            rank.
+          </p>
 
-      <div
-        className={`dropzone ${dragging ? "dragging" : ""}`}
-        onClick={() => fileInput.current?.click()}
-        onDragOver={(event) => {
-          event.preventDefault();
-          setDragging(true);
-        }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={(event) => {
-          event.preventDefault();
-          setDragging(false);
-          onFile(event.dataTransfer.files[0]);
-        }}
-      >
-        <strong>Drop a CSV here</strong> or click to browse
-        <div className="hint">samples &times; 96 contexts, integer counts, header row required</div>
-        <input
-          ref={fileInput}
-          type="file"
-          accept=".csv,text/csv"
-          hidden
-          onChange={(event) => onFile(event.target.files[0])}
-        />
+          <div
+            className={`dropzone ${dragging ? "dragging" : ""}`}
+            onClick={() => fileInput.current?.click()}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDragging(false);
+              onFile(event.dataTransfer.files[0]);
+            }}
+          >
+            <strong>Drop a CSV here</strong> or click to browse
+            <div className="hint">
+              samples &times; 96 contexts, integer counts, header row required
+            </div>
+            <input
+              ref={fileInput}
+              type="file"
+              accept=".csv,text/csv"
+              hidden
+              onChange={(event) => onFile(event.target.files[0])}
+            />
+          </div>
+
+          <div className="sample-row">
+            No data handy?
+            <button type="button" onClick={loadSample}>
+              Try the sample dataset
+            </button>
+            <span className="note">30 synthetic samples with 3 planted signatures</span>
+          </div>
+
+          {parseError && <div className="error-box">{parseError}</div>}
+
+          <h2>Expected file format</h2>
+          <CsvPreview />
+
+          <h2>Or use the API directly</h2>
+          <div className="curl-block">
+            <CopyButton text={curl} />
+            <pre>{curl}</pre>
+          </div>
+          <p className="note">
+            Full schema and every endpoint at{" "}
+            <a href="/api/docs" target="_blank" rel="noreferrer">
+              /api/docs
+            </a>
+            . Keys are rate-limited per IP; jobs per key.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="column-title">What a run returns</h2>
+          <p className="subtitle">
+            The three signatures planted in the bundled sample dataset, drawn with the same plot
+            the results page uses. A run on that dataset should recover these profiles, their
+            per-sample exposures, and a learned rank of 3.
+          </p>
+          <ExampleOutput />
+        </section>
       </div>
-
-      <div className="sample-row">
-        No data handy?
-        <button type="button" onClick={loadSample}>
-          Try the sample dataset
-        </button>
-        <span className="note">30 synthetic samples with 3 planted signatures</span>
-      </div>
-
-      {parseError && <div className="error-box">{parseError}</div>}
 
       {dataset && (
         <>
@@ -171,7 +302,7 @@ export default function SubmitPage() {
                   onChange={set("rankMax")}
                 />
               </div>
-              <span className="note">the best rank in this range is learned</span>
+              <span className="note">the best rank in this range is learned (SBFI)</span>
             </div>
             <div className="field">
               <label htmlFor="iters">Max iterations</label>
@@ -196,7 +327,7 @@ export default function SubmitPage() {
                 value={params.seed}
                 onChange={set("seed")}
               />
-              <span className="note">set for a repeatable run</span>
+              <span className="note">seeds R's RNG for an exactly repeatable run</span>
             </div>
           </div>
 
