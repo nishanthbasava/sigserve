@@ -2,11 +2,15 @@
 
 Three planted signatures with distinct substitution-class profiles and
 smoothly varying exposures across 30 samples, Poisson noise on the
-expected counts. Deterministic: python scripts/make_sample_dataset.py
-rewrites the same file byte-for-byte.
+expected counts. Also writes the planted signature profiles to
+web/public/sample-signatures.json so the landing page can show the
+dataset's ground truth as example output. Deterministic:
+python scripts/make_sample_dataset.py rewrites the same files
+byte-for-byte.
 """
 
 import csv
+import json
 import math
 import random
 from pathlib import Path
@@ -44,6 +48,12 @@ def normalized(weights: dict[str, float]) -> list[float]:
     total = sum(raw)
     return [value / total for value in raw]
 
+
+SIGNATURE_NAMES = [
+    "SBS1-like (C>T dominant)",
+    "SBS4-like (C>A dominant)",
+    "SBS5-like (flat, T>C leaning)",
+]
 
 SIGNATURES = [
     # SBS1-like: C>T dominant
@@ -83,6 +93,22 @@ def main() -> None:
         writer.writerow(["sample", *CONTEXTS])
         writer.writerows(rows)
     print(f"wrote {out_path} ({N_SAMPLES} samples x 96 contexts)")
+
+    signatures_path = out_path.parent / "sample-signatures.json"
+    signatures_path.write_text(
+        json.dumps(
+            {
+                "contexts": CONTEXTS,
+                "signatures": [
+                    {"name": name, "profile": [round(v, 6) for v in profile]}
+                    for name, profile in zip(SIGNATURE_NAMES, SIGNATURES, strict=True)
+                ],
+            },
+            separators=(",", ":"),
+        )
+        + "\n"
+    )
+    print(f"wrote {signatures_path} ({len(SIGNATURES)} planted signatures)")
 
 
 if __name__ == "__main__":
