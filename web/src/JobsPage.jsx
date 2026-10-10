@@ -40,11 +40,12 @@ export default function JobsPage() {
       <table>
         <thead>
           <tr>
+            <th>ID</th>
             <th>Dataset</th>
             <th>Status</th>
             <th>Submitted</th>
             <th className="num">Runtime</th>
-            <th className="num">Size</th>
+            <th className="num">Samples</th>
             <th className="num">Rank</th>
             <th aria-label="Actions" />
           </tr>
@@ -58,16 +59,17 @@ export default function JobsPage() {
                 window.location.hash = `#/jobs/${job.id}`;
               }}
             >
-              <td>{job.name || job.id.slice(0, 8)}</td>
+              <td className="mono" title={job.id}>
+                {job.id.slice(0, 8)}
+              </td>
+              <td>{job.name || "—"}</td>
               <td>
                 <span className={`chip ${job.status}`}>{job.status}</span>
               </td>
               <td title={job.created_at}>{formatWhen(job.created_at)}</td>
               <td className="num">{runtimeOf(job) ?? "—"}</td>
-              <td className="num">
-                {job.n_mutation_types && job.n_samples
-                  ? `${job.n_mutation_types}×${job.n_samples}`
-                  : "—"}
+              <td className="num" title={job.n_mutation_types ? `${job.n_mutation_types} mutation types` : undefined}>
+                {job.n_samples ?? "—"}
               </td>
               <td className="num">{rankLabel(job.params)}</td>
               <td className="num">
