@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { submitJob } from "./api.js";
 import { parseMatrixCsv } from "./csv.js";
@@ -118,6 +118,13 @@ export default function SubmitPage() {
   const [params, setParams] = useState(DEFAULTS);
   const [dragging, setDragging] = useState(false);
   const fileInput = useRef(null);
+  const loadedRef = useRef(null);
+
+  // The parameters form renders below the fold, so a successful load looked
+  // like nothing happened. Bring the confirmation into view.
+  useEffect(() => {
+    if (dataset) loadedRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [dataset]);
 
   const submit = useMutation({
     mutationFn: submitJob,
@@ -260,7 +267,7 @@ export default function SubmitPage() {
 
       {dataset && (
         <>
-          <div className="ok-box">
+          <div className="ok-box" ref={loadedRef}>
             Loaded <b>{dataset.source}</b>: {nSamples} samples &times; 96 contexts,{" "}
             {dataset.matrix.flat().reduce((a, b) => a + b, 0).toLocaleString()} total mutations.
           </div>
